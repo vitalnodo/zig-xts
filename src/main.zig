@@ -64,11 +64,11 @@ pub fn XTS(comptime BlockCipher: anytype) type {
                 xor(&last_block, &last_block, &tweak);
 
                 @memcpy(dst[i - BLK .. i], &last_block);
-                @memcpy(dst[i..], x[0 .. len - i]);
+                @memcpy(dst[i..], x[0..rem]);
             }
         }
 
-        pub fn decrypt(self: Self, dst: []u8, src: []const u8, iv: []u8) !void {
+        pub fn decrypt(self: Self, dst: []u8, src: []const u8, iv: []u8) void {
             const BLK = block_length;
             var tweak: [BLK]u8 = undefined;
             @memset(&tweak, 0);
@@ -98,7 +98,7 @@ pub fn XTS(comptime BlockCipher: anytype) type {
                 xor(&last_block, &last_block, &previous_tweak);
 
                 @memcpy(dst[i - BLK .. i], &last_block);
-                @memcpy(dst[i..], x[0 .. len - i]);
+                @memcpy(dst[i..], x[0..rem]);
             }
         }
 
@@ -194,7 +194,7 @@ test "AES128" {
         var x = X.init(&key);
         x.encrypt(res_encrypted[0..len], src[0..len], iv[0..iv_len]);
         try testing.expectEqualSlices(u8, dst[0..len], res_encrypted[0..len]);
-        try x.decrypt(res_decrypted[0..len], dst[0..len], iv[0..iv_len]);
+        x.decrypt(res_decrypted[0..len], dst[0..len], iv[0..iv_len]);
         try testing.expectEqualSlices(u8, src[0..len], res_decrypted[0..len]);
     }
 }
