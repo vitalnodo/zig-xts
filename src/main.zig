@@ -129,40 +129,58 @@ pub fn XTS(comptime BlockCipher: anytype) type {
             }
         }
 
-        pub fn decrypt(self: Self, dst: []u8, src: []const u8, iv: []u8) void {
-            var tweak: [BLK]u8 = undefined;
-            @memset(&tweak, 0);
-            @memcpy(tweak[0..iv.len], iv);
-            // 1) T ← AES-enc(Key2, i) ⊗ α^j
-            self.enc_tweak.encrypt(&tweak, &tweak);
-            var previous_tweak: [BLK]u8 = undefined;
-
+        pub fn decrypt(
+            self: Self,
+            dst: []u8,
+            src: []const u8,
+            IV: []const u8,
+        ) void {
             const len = src.len;
-            var x: [BLK]u8 = undefined;
+            var tweak: [BLK]u8 = self.initTweak(IV);
             var i: usize = 0;
-            while (i + BLK <= len) : (i += BLK) {
-                // 2) CC ← C ⊕ T
-                xor(x[0..BLK], src[i .. i + BLK], tweak[0..BLK]);
-                // 3) PP ← AES-dec(Keys1, CC)
-                self.dec_ecb.decrypt(&x, &x);
-                // 4) P ← PP ⊕ T
-                xor(dst[i .. i + BLK], x[0..BLK], tweak[0..BLK]);
-                previous_tweak = tweak;
-                mul2(&tweak);
+            // 1) for q ← 0 to m-2 do
+            while (i + 2 * BLK <= len) : (i += BLK) {
+                // a) P_q ← XTS-AES-blockDec(Key, Cj, i, q)
+                self.decryptBlock(
+                    dst[i .. i + BLK],
+                    src[i .. i + BLK],
+                    &tweak,
+                );
             }
-            if (i < len) {
-                xor(&x, &x, &previous_tweak);
-                const rem = len % BLK;
-                var last_block: [BLK]u8 = undefined;
-                @memcpy(last_block[0..rem], src[i..len]);
-                @memcpy(last_block[rem..BLK], x[rem..BLK]);
-
-                xor(&last_block, &last_block, &previous_tweak);
-                self.dec_ecb.decrypt(&last_block, &last_block);
-                xor(&last_block, &last_block, &previous_tweak);
-
-                @memcpy(dst[i - BLK .. i], &last_block);
-                @memcpy(dst[i..], x[0..rem]);
+            // 2) b ← bit-size of C_m
+            // but bytes
+            const rem = len % BLK;
+            // 3) if b = 0 then do
+            if (rem == 0) {
+                // b) P_{m-1} ← XTS-AES-blockDec(Key, C_{m-1}, i, m-1)
+                self.decryptBlock(
+                    dst[i .. i + BLK],
+                    src[i .. i + BLK],
+                    &tweak,
+                );
+                // c) P_m ← empty
+                // nothing
+            } else {
+                // d) PP ← XTS-AES-blockDec(Key, Cm-1, i, m)
+                self.decryptBlock(
+                    dst[i .. i + BLK],
+                    src[i .. i + BLK],
+                    &tweak,
+                );
+                // e) Pm ← first b bits of PP
+                @memcpy(dst[len - rem ..], dst[i .. i + rem]);
+                // f) CP ← last (128-b) bits of PP
+                const last = dst[i .. i + BLK][rem..];
+                // g) CC ← C_m | CP
+                var stealing: [BLK]u8 = undefined;
+                @memcpy(stealing[0..rem], src[len - rem .. len]);
+                @memcpy(stealing[rem..], last);
+                // h) P_{m-1} ← XTS-AES-blockDec(Key, CC, i, m-1)
+                self.decryptBlock(
+                    dst[len - rem - BLK .. len - rem],
+                    &stealing,
+                    &tweak,
+                );
             }
         }
 
