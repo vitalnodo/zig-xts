@@ -39,6 +39,7 @@ pub fn XTS(comptime BlockCipher: anytype) type {
             var tweak: [BLK]u8 = undefined;
             @memset(&tweak, 0);
             @memcpy(tweak[0..iv.len], iv);
+            // 1) T ← AES-enc(Key2, i) ⊗ α^j
             self.enc_tweak.encrypt(&tweak, &tweak);
             var previous_tweak: [BLK]u8 = undefined;
 
@@ -46,8 +47,11 @@ pub fn XTS(comptime BlockCipher: anytype) type {
             var x: [BLK]u8 = undefined;
             var i: usize = 0;
             while (i + BLK <= len) : (i += BLK) {
+                // 2) PP ← P ⊕ T
                 xor(x[0..BLK], src[i .. i + BLK], tweak[0..BLK]);
+                // 3) CC ← AES-enc(Key1, PP)
                 self.enc_ecb.encrypt(&x, &x);
+                // 4) C ← CC ⊕ T
                 xor(dst[i .. i + BLK], x[0..BLK], tweak[0..BLK]);
                 previous_tweak = tweak;
                 mul2(&tweak);
@@ -73,6 +77,7 @@ pub fn XTS(comptime BlockCipher: anytype) type {
             var tweak: [BLK]u8 = undefined;
             @memset(&tweak, 0);
             @memcpy(tweak[0..iv.len], iv);
+            // 1) T ← AES-enc(Key2, i) ⊗ α^j
             self.enc_tweak.encrypt(&tweak, &tweak);
             var previous_tweak: [BLK]u8 = undefined;
 
@@ -80,8 +85,11 @@ pub fn XTS(comptime BlockCipher: anytype) type {
             var x: [BLK]u8 = undefined;
             var i: usize = 0;
             while (i + BLK <= len) : (i += BLK) {
+                // 2) CC ← C ⊕ T
                 xor(x[0..BLK], src[i .. i + BLK], tweak[0..BLK]);
+                // 3) PP ← AES-dec(Keys1, CC)
                 self.dec_ecb.decrypt(&x, &x);
+                // 4) P ← PP ⊕ T
                 xor(dst[i .. i + BLK], x[0..BLK], tweak[0..BLK]);
                 previous_tweak = tweak;
                 mul2(&tweak);
