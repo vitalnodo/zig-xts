@@ -161,7 +161,8 @@ pub fn XTS(comptime BlockCipher: anytype) type {
                 // c) P_m ← empty
                 // nothing
             } else {
-                // d) PP ← XTS-AES-blockDec(Key, Cm-1, i, m)
+                var previous_tweak = tweak;
+                mul2(&tweak);
                 self.decryptBlock(
                     dst[i .. i + BLK],
                     src[i .. i + BLK],
@@ -179,7 +180,7 @@ pub fn XTS(comptime BlockCipher: anytype) type {
                 self.decryptBlock(
                     dst[len - rem - BLK .. len - rem],
                     &stealing,
-                    &tweak,
+                    &previous_tweak,
                 );
             }
         }

@@ -1,6 +1,5 @@
 # XTS mode for Zig
 
-BUG: decryption doesn't work in the case when the ciphertext.len % 16 != 0
 Currently the blockcipher must be AES (that has 128 bit block) with a key length of either 128 or 256 bits.
 
 ## XTS flow chart
