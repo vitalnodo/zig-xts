@@ -4,24 +4,29 @@ const mem = std.mem;
 const debug = std.debug;
 const testing = std.testing;
 
-pub fn XTS(comptime BlockCipher: anytype) type {
-    const EncryptCtx = aes.AesEncryptCtx(BlockCipher);
-    const DecryptCtx = aes.AesDecryptCtx(BlockCipher);
-    const BLK = EncryptCtx.block_length;
+pub fn XTS(
+    comptime BlockCipher: anytype,
+    comptime EncryptCtx: anytype,
+    comptime DecryptCtx: anytype,
+) type {
+    const BLK = EncryptCtx(BlockCipher).block_length;
+    const key_bits = BlockCipher.key_bits;
 
     return struct {
         const Self = @This();
-        enc_ecb: EncryptCtx,
-        dec_ecb: DecryptCtx,
-        enc_tweak: EncryptCtx,
+        enc_ecb: EncryptCtx(BlockCipher),
+        dec_ecb: DecryptCtx(BlockCipher),
+        enc_tweak: EncryptCtx(BlockCipher),
 
         pub fn init(key: []const u8) Self {
-            std.debug.assert(BlockCipher.key_bits == 128 or BlockCipher.key_bits == 256);
-            std.debug.assert(key.len == BlockCipher.key_bits / 8 * 2);
-            const middle = BlockCipher.key_bits / 8;
-            const enc_ecb = BlockCipher.initEnc(key[0..middle].*);
-            const dec_ecb = DecryptCtx.initFromEnc(enc_ecb);
-            const enc_tweak = BlockCipher.initEnc(key[middle .. middle * 2].*);
+            std.debug.assert(key_bits == 128 or key_bits == 256);
+            std.debug.assert(key.len == key_bits / 8 * 2);
+            const middle = key_bits / 8;
+            const enc_ecb = EncryptCtx(BlockCipher).init(key[0..middle].*);
+            const dec_ecb = DecryptCtx(BlockCipher).init(key[0..middle].*);
+            const enc_tweak = EncryptCtx(BlockCipher).init(
+                key[middle .. middle * 2].*,
+            );
             return .{
                 .enc_ecb = enc_ecb,
                 .dec_ecb = dec_ecb,
@@ -216,7 +221,13 @@ const Test = struct {
     iv: []const u8,
 };
 test "AES128" {
-    const X = XTS(aes.Aes128);
+    const EncryptCtx = aes.AesEncryptCtx;
+    const DecryptCtx = aes.AesDecryptCtx;
+    const X = XTS(
+        aes.Aes128,
+        EncryptCtx,
+        DecryptCtx,
+    );
     const tests = [_]Test{
         Test{
             .key = "0000000000000000000000000000000000000000000000000000000000000000",
